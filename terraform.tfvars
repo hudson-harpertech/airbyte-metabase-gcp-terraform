@@ -1,0 +1,7 @@
+domain_name = "example.com"
+org_id = "8675309"
+project_id = "airbyte-metabase-demo"
+region = "us-west1"
+zone = "us-west1-b"
+vpc_name = "my-vpc"
+support_email = "techsupport@example.com"
