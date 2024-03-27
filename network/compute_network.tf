@@ -11,6 +11,7 @@ resource "google_compute_subnetwork" "my-custom-subnet" {
   ip_cidr_range = "10.10.0.0/24"
   network       = google_compute_network.vpc.name
   region        = var.region
+  depends_on    = [google_compute_network.vpc]
 }
 
 resource "google_compute_firewall" "allow-health-check-airbyte" {
@@ -27,6 +28,7 @@ resource "google_compute_firewall" "allow-health-check-airbyte" {
   project       = var.project_id
   source_ranges = ["130.211.0.0/22", "35.191.0.0/16"]
   target_tags   = ["airbyte"]
+  depends_on    = [google_compute_subnetwork.my-custom-subnet]
 }
 
 resource "google_compute_firewall" "allow-health-check-metabase" {
@@ -43,6 +45,7 @@ resource "google_compute_firewall" "allow-health-check-metabase" {
   project       = var.project_id
   source_ranges = ["130.211.0.0/22", "35.191.0.0/16"]
   target_tags   = ["metabase"]
+  depends_on    = [google_compute_subnetwork.my-custom-subnet]
 }
 
 resource "google_compute_firewall" "custom-allow-http" {
@@ -59,6 +62,7 @@ resource "google_compute_firewall" "custom-allow-http" {
   project       = var.project_id
   source_ranges = ["0.0.0.0/0"]
   target_tags   = ["http-server"]
+  depends_on    = [google_compute_subnetwork.my-custom-subnet]
 }
 
 resource "google_compute_firewall" "custom-allow-https" {
@@ -75,6 +79,7 @@ resource "google_compute_firewall" "custom-allow-https" {
   project       = var.project_id
   source_ranges = ["0.0.0.0/0"]
   target_tags   = ["https-server"]
+  depends_on    = [google_compute_subnetwork.my-custom-subnet]
 }
 
 resource "google_compute_firewall" "custom-allow-icmp" {
@@ -90,6 +95,7 @@ resource "google_compute_firewall" "custom-allow-icmp" {
   priority      = "65534"
   project       = var.project_id
   source_ranges = ["0.0.0.0/0"]
+  depends_on    = [google_compute_subnetwork.my-custom-subnet]
 }
 
 resource "google_compute_firewall" "custom-allow-rdp" {
@@ -106,6 +112,7 @@ resource "google_compute_firewall" "custom-allow-rdp" {
   priority      = "65534"
   project       = var.project_id
   source_ranges = ["0.0.0.0/0"]
+  depends_on    = [google_compute_subnetwork.my-custom-subnet]
 }
 
 resource "google_compute_firewall" "custom-allow-ssh" {
@@ -122,6 +129,7 @@ resource "google_compute_firewall" "custom-allow-ssh" {
   priority      = "65534"
   project       = var.project_id
   source_ranges = ["0.0.0.0/0"]
+  depends_on    = [google_compute_subnetwork.my-custom-subnet]
 }
 
 # Create Cloud Router
@@ -131,6 +139,7 @@ resource "google_compute_router" "router" {
   name    = "nat-router"
   network = var.vpc_name
   region  = var.region
+  depends_on    = [google_compute_subnetwork.my-custom-subnet]
 }
 
 ## Create Nat Gateway
@@ -141,6 +150,7 @@ resource "google_compute_router_nat" "nat" {
   region                             = var.region
   nat_ip_allocate_option             = "AUTO_ONLY"
   source_subnetwork_ip_ranges_to_nat = "ALL_SUBNETWORKS_ALL_IP_RANGES"
+  depends_on                         = [google_compute_router.router]
 
   log_config {
     enable = true
@@ -154,6 +164,7 @@ resource "google_compute_global_address" "metabase-lb-ipv4" {
   name          = "metabase-lb-ipv4"
   prefix_length = "0"
   project       = var.project_id
+  depends_on    = [google_compute_router_nat.nat]
 }
 
 resource "google_compute_global_address" "airbyte-lb-ipv4" {
@@ -162,6 +173,7 @@ resource "google_compute_global_address" "airbyte-lb-ipv4" {
   name          = "airbyte-lb-ipv4"
   prefix_length = "0"
   project       = var.project_id
+  depends_on    = [google_compute_router_nat.nat]
 }
 
 resource "google_compute_managed_ssl_certificate" "airbyte-cert" {
@@ -169,9 +181,10 @@ resource "google_compute_managed_ssl_certificate" "airbyte-cert" {
     domains = ["airbyte.${var.domain_name}"]
   }
 
-  name    = "airbyte-cert"
-  project = var.project_id
-  type    = "MANAGED"
+  name       = "airbyte-cert"
+  project    = var.project_id
+  type       = "MANAGED"
+  depends_on = [google_compute_global_address.airbyte-lb-ipv4]
 }
 
 resource "google_compute_managed_ssl_certificate" "metabase-cert" {
@@ -179,15 +192,17 @@ resource "google_compute_managed_ssl_certificate" "metabase-cert" {
     domains = ["metabase.${var.domain_name}"]
   }
 
-  name    = "metabase-cert"
-  project = var.project_id
-  type    = "MANAGED"
+  name       = "metabase-cert"
+  project    = var.project_id
+  type       = "MANAGED"
+  depends_on = [google_compute_global_address.metabase-lb-ipv4]
 }
 
 resource "google_iap_brand" "iap_brand" {
   support_email     = var.support_email
   application_title = "Cloud IAP protected Application"
   project           = var.project_id
+  depends_on        = [google_compute_managed_ssl_certificate.airbyte-cert, google_compute_managed_ssl_certificate.metabase-cert]
 
   lifecycle {
     ignore_changes = all
@@ -197,4 +212,5 @@ resource "google_iap_brand" "iap_brand" {
 resource "google_iap_client" "iap_client" {
   display_name = "Test Client"
   brand        =  google_iap_brand.iap_brand.name
+  depends_on   = [google_iap_brand.iap_brand]
 }
