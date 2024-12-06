@@ -18,7 +18,7 @@ sudo usermod -a -G docker $USER
 sudo apt-get -y install docker-compose-plugin
 
 mkdir -p airbyte \u0026\u0026 cd airbyte
-wget https://raw.githubusercontent.com/airbytehq/airbyte/master/run-ab-platform.sh
+sudo wget https://raw.githubusercontent.com/airbytehq/airbyte/master/run-ab-platform.sh
 chmod +x run-ab-platform.sh
 sudo ./run-ab-platform.sh -b
 sed -i "s/^BASIC_AUTH_PASSWORD=.*/BASIC_AUTH_PASSWORD=SuperSecretPassword/" .env
